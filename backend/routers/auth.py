@@ -5,7 +5,6 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import os
-import hashlib  # 🔥 qo‘shildi
 
 router = APIRouter()
 
@@ -13,23 +12,25 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-32-chars-min")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440))
 
+# 🔥 Use bcrypt context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 
-# 🔐 HASH FUNCTION (FIX)
+# 🔥 HASH FUNCTION — truncate to 72 bytes for bcrypt
 def hash_password(password: str) -> str:
-    password = hashlib.sha256(password.encode()).hexdigest()
-    return pwd_context.hash(password)
+    # take first 72 bytes only (bcrypt limit)
+    password_bytes = password.encode("utf-8")[:72]
+    return pwd_context.hash(password_bytes)
 
 
-# 🔍 VERIFY FUNCTION (FIX)
+# 🔥 VERIFY FUNCTION — truncate to 72 bytes
 def verify_password(plain: str, hashed: str) -> bool:
-    plain = hashlib.sha256(plain.encode()).hexdigest()
-    return pwd_context.verify(plain, hashed)
+    plain_bytes = plain.encode("utf-8")[:72]
+    return pwd_context.verify(plain_bytes, hashed)
 
 
-# Demo users — FIXED (endi to‘g‘ri hash ishlatiladi)
+# Demo users — fixed hashes
 DEMO_USERS = {
     "admin": {
         "username": "admin",
@@ -92,4 +93,5 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @router.get("/me")
 def get_me(current_user: dict = Depends(get_current_user)):
+    # remove hashed_password from response
     return {k: v for k, v in current_user.items() if k != "hashed_password"}
