@@ -20,14 +20,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 # --- YORDAMCHI FUNKSIYALAR ---
 
 def get_safe_password(password: str) -> str:
-    """
-    Bcrypt 72 baytdan ortig'ini qabul qilmaydi. 
-    Xatolikni oldini olish uchun parolni baytlarda kesib, 
-    so'ngra yana stringga qaytaramiz.
-    """
+    # 72 bayt limitini saqlab, yana stringga qaytaradi
     return password.encode("utf-8")[:72].decode("utf-8", "ignore")
 
 def hash_password(password: str) -> str:
+    # Passlib faqat string bilan ishlashini ta'minlaymiz
     return pwd_context.hash(get_safe_password(password))
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
