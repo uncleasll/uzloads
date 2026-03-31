@@ -8,29 +8,33 @@ import os
 
 router = APIRouter()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-32-chars-min")
+# Muhit o'zgaruvchilari (Environment Variables)
+SECRET_KEY = os.getenv("SECRET_KEY", "your-super-secret-key-64-chars-long")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440))
 
-# 🔥 Use bcrypt context
+# Bcrypt konfiguratsiyasi
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
+# --- YORDAMCHI FUNKSIYALAR ---
 
-# 🔥 HASH FUNCTION — truncate to 72 bytes for bcrypt
+def get_safe_password(password: str) -> str:
+    """
+    Bcrypt 72 baytdan ortig'ini qabul qilmaydi. 
+    Xatolikni oldini olish uchun parolni baytlarda kesib, 
+    so'ngra yana stringga qaytaramiz.
+    """
+    return password.encode("utf-8")[:72].decode("utf-8", "ignore")
+
 def hash_password(password: str) -> str:
-    # take first 72 bytes only (bcrypt limit)
-    password_bytes = password.encode("utf-8")[:72]
-    return pwd_context.hash(password_bytes)
+    return pwd_context.hash(get_safe_password(password))
 
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(get_safe_password(plain_password), hashed_password)
 
-# 🔥 VERIFY FUNCTION — truncate to 72 bytes
-def verify_password(plain: str, hashed: str) -> bool:
-    plain_bytes = plain.encode("utf-8")[:72]
-    return pwd_context.verify(plain_bytes, hashed)
+# --- DEMO MA'LUMOTLAR ---
 
-
-# Demo users — fixed hashes
 DEMO_USERS = {
     "admin": {
         "username": "admin",
@@ -46,6 +50,7 @@ DEMO_USERS = {
     },
 }
 
+# --- MODELLAR ---
 
 class Token(BaseModel):
     access_token: str
@@ -54,31 +59,32 @@ class Token(BaseModel):
     full_name: str
     role: str
 
+# --- JWT LOGIKASI ---
 
 def create_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode["exp"] = expire
+    to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None or username not in DEMO_USERS:
-            raise HTTPException(401, "Invalid credentials")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
         return DEMO_USERS[username]
     except JWTError:
-        raise HTTPException(401, "Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
+# --- ENDPOINTLAR ---
 
 @router.post("/token", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     user = DEMO_USERS.get(form_data.username)
 
     if not user or not verify_password(form_data.password, user["hashed_password"]):
-        raise HTTPException(401, "Incorrect username or password")
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
 
     token = create_token({"sub": user["username"]})
 
@@ -90,8 +96,9 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         role=user["role"],
     )
 
-
 @router.get("/me")
 def get_me(current_user: dict = Depends(get_current_user)):
-    # remove hashed_password from response
-    return {k: v for k, v in current_user.items() if k != "hashed_password"}
+    # Parol xeshini javobdan olib tashlaymiz
+    user_data = current_user.copy()
+    user_data.pop("hashed_password", None)
+    return user_data
