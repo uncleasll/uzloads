@@ -1,7 +1,10 @@
 import axios from 'axios'
 
+// 'as any' yordamida TypeScript'ni chetlab o'tamiz
+const API_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:8000';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseURL: API_URL,
 })
 
 api.interceptors.request.use((config) => {
@@ -17,7 +20,10 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('uzloads_token')
-      window.location.href = '/login'
+      // Cheksiz login redirectining oldini olish
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(err)
   },

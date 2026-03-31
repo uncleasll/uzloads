@@ -32,6 +32,7 @@ export interface Load {
   miles: number | null
   equipment_type: string | null
   reference_number: string | null
+  po_number: string | null // 🔥 MANA SHU QATOR QO'SHILDI
   notes: string | null
   settlement_id: number | null
   attachments: Attachment[]
@@ -50,6 +51,7 @@ export interface Attachment {
   created_at: string
 }
 
+// ... qolgan barcha funksiyalar (useLoads, useCreateLoad va h.k.) o'zgarishsiz qoladi
 export interface LoadFilters {
   status?: string
   driver_id?: number
