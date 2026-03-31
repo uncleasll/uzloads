@@ -5,6 +5,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import os
+import hashlib  # 🔥 qo‘shildi
 
 router = APIRouter()
 
@@ -15,18 +16,31 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
-# Demo users — replace with DB-backed users in production
+
+# 🔐 HASH FUNCTION (FIX)
+def hash_password(password: str) -> str:
+    password = hashlib.sha256(password.encode()).hexdigest()
+    return pwd_context.hash(password)
+
+
+# 🔍 VERIFY FUNCTION (FIX)
+def verify_password(plain: str, hashed: str) -> bool:
+    plain = hashlib.sha256(plain.encode()).hexdigest()
+    return pwd_context.verify(plain, hashed)
+
+
+# Demo users — FIXED (endi to‘g‘ri hash ishlatiladi)
 DEMO_USERS = {
     "admin": {
         "username": "admin",
         "full_name": "Admin User",
-        "hashed_password": pwd_context.hash("admin123"),
+        "hashed_password": hash_password("admin123"),
         "role": "admin",
     },
     "dispatcher": {
         "username": "dispatcher",
         "full_name": "Dispatcher",
-        "hashed_password": pwd_context.hash("dispatch123"),
+        "hashed_password": hash_password("dispatch123"),
         "role": "dispatcher",
     },
 }
@@ -47,10 +61,6 @@ def create_token(data: dict) -> str:
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
-
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -65,9 +75,12 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 @router.post("/token", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     user = DEMO_USERS.get(form_data.username)
+
     if not user or not verify_password(form_data.password, user["hashed_password"]):
         raise HTTPException(401, "Incorrect username or password")
+
     token = create_token({"sub": user["username"]})
+
     return Token(
         access_token=token,
         token_type="bearer",
